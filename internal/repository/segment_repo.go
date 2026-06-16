@@ -21,8 +21,9 @@ func NewSegmentRepo(pool *pgxpool.Pool) *SegmentRepo {
 	return &SegmentRepo{pool: pool}
 }
 
-// GetByID retrieves a segment with its rules by UUID.
-func (r *SegmentRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Segment, error) {
+// GetByID retrieves a segment with its rules by UUID (satisfies evaluator.SegmentRepository interface).
+// appID is accepted for interface compatibility.
+func (r *SegmentRepo) GetByID(ctx context.Context, appID, id uuid.UUID) (*domain.Segment, error) {
 	row := r.pool.QueryRow(ctx, `
 		SELECT id, application_id, name, description, operator, version, created_at, updated_at
 		FROM segments WHERE id = $1

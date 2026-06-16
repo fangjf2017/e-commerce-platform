@@ -62,6 +62,12 @@ func (r *FlagRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.FeatureFl
 	return f, nil
 }
 
+// ListByEnvironment returns all non-deleted flags for a given environment (without relations).
+// This alias satisfies the evaluator.FlagRepository interface.
+func (r *FlagRepo) ListByEnvironment(ctx context.Context, appID, envID uuid.UUID) ([]*domain.FeatureFlag, error) {
+	return r.List(ctx, appID, envID)
+}
+
 // List returns all non-deleted flags for a given environment (without relations).
 func (r *FlagRepo) List(ctx context.Context, appID, envID uuid.UUID) ([]*domain.FeatureFlag, error) {
 	rows, err := r.pool.Query(ctx, `

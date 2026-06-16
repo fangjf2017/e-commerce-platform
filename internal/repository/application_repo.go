@@ -113,8 +113,9 @@ func NewEnvironmentRepo(pool *pgxpool.Pool) *EnvironmentRepo {
 	return &EnvironmentRepo{pool: pool}
 }
 
-// GetByID retrieves an environment by UUID.
-func (r *EnvironmentRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Environment, error) {
+// GetByID retrieves an environment by UUID (satisfies evaluator.EnvironmentRepository interface).
+// appID is accepted for interface compatibility but not used in the query since id is globally unique.
+func (r *EnvironmentRepo) GetByID(ctx context.Context, appID, id uuid.UUID) (*domain.Environment, error) {
 	row := r.pool.QueryRow(ctx, `
 		SELECT id, application_id, name, slug, requires_approval, created_at, updated_at
 		FROM environments WHERE id = $1 AND deleted_at IS NULL
