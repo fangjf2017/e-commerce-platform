@@ -1,0 +1,47 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: ${SERVICE_NAME:feature-management-service}
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/featureflags}
+    username: ${DB_USER:fms}
+    password: ${DB_PASSWORD:fmspass}
+    hikari:
+      maximum-pool-size: ${DB_MAX_CONNS:20}
+      minimum-idle: ${DB_MIN_CONNS:2}
+      max-lifetime: ${DB_MAX_CONN_LIFETIME_MS:1800000}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DB:0}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: http://${OTLP_ENDPOINT:localhost:4317}
+
+fms:
+  auth:
+    api-key: ${AUTH_API_KEY:your-secret-api-key-here}
+
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}

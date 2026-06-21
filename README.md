@@ -1,6 +1,6 @@
 # Feature Management Service
 
-A production-grade feature flag management and evaluation service built in Go. Designed to serve flag evaluations at high throughput (~100k evaluations/second) with sub-millisecond latency across 100+ applications and services.
+A production-grade feature flag management and evaluation service built with Java and Spring Boot. Designed to serve flag evaluations at high throughput (~100k evaluations/second) with sub-millisecond latency across 100+ applications and services.
 
 ---
 
@@ -36,11 +36,11 @@ The Feature Management Service (FMS) is the single source of truth for feature f
 |---|---|
 | Throughput target | ~100,000 evaluations/second |
 | p99 evaluation latency | < 1ms (L1 cache hit) |
-| Cache tiers | L1 in-process ristretto (30s TTL) + L2 Redis (5min TTL) |
+| Cache tiers | L1 in-process Caffeine (30s TTL) + L2 Redis (5min TTL) |
 | Rollout granularity | 0.01% (MurmurHash3 bucketing, 0-9999 range) |
 | Stickiness | Deterministic: same entity always gets same variant |
 | Invalidation | Redis pub/sub, propagates to all instances in < 100ms |
-| Observability | Prometheus metrics, OpenTelemetry traces, structured zap logs |
+| Observability | Micrometer/Prometheus metrics, OpenTelemetry traces, structured logs |
 
 ---
 
@@ -52,15 +52,15 @@ The Feature Management Service (FMS) is the single source of truth for feature f
                     │                                           │
   ┌───────────────┐ │ ┌──────────┐  ┌──────────────────────┐  │
   │ Management UI │─┼─►│ REST API │  │   Evaluation Engine   │  │
-  └───────────────┘ │ │ (chi)    │  │                      │  │
-                    │ └─────┬────┘  │  Rule priority queue  │  │
-  ┌───────────────┐ │       │       │  Condition matching   │  │
+  └───────────────┘ │ │ (Spring  │  │                      │  │
+                    │ │  MVC)    │  │  Rule priority queue  │  │
+  ┌───────────────┐ │ └─────┬────┘  │  Condition matching   │  │
   │ Service SDKs  │─┼───────┘       │  Rollout bucketing    │  │
   └───────────────┘ │               │  (MurmurHash3)        │  │
                     │               └──────────┬───────────┘  │
                     │          ┌───────────────▼───────────┐  │
                     │          │      Tiered Cache          │  │
-                    │          │  L1: ristretto (30s TTL)   │  │
+                    │          │  L1: Caffeine (30s TTL)    │  │
                     │          │  L2: Redis (5min TTL)      │  │
                     │          └───────────────┬───────────┘  │
                     │                          │               │
@@ -536,37 +536,22 @@ Standard fields on every log line:
 
 ```bash
 # Start all dependencies (PostgreSQL, Redis)
-make dev-up
+make docker-up
 
-# Run the service locally with hot-reload
-make dev-run
+# Run the service locally (Flyway migrations apply automatically on boot)
+make run
 
 # Run the full test suite
 make test
 
-# Run tests with coverage report
-make test-coverage
-
-# Run linter (golangci-lint)
-make lint
-
-# Apply database migrations
-make migrate-up
-
-# Roll back the last migration
-make migrate-down
-
-# Build the binary
+# Compile only
 make build
 
-# Build and push Docker image
-make docker-push IMAGE_TAG=v1.2.3
-
-# Generate mocks for testing
-make generate
+# Build the runnable jar
+make package
 
 # Tear down dev dependencies
-make dev-down
+make docker-down
 ```
 
 ---

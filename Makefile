@@ -1,16 +1,13 @@
-.PHONY: build migrate test lint docker-up docker-down run generate
+.PHONY: build test docker-up docker-down run package
 
 build:
-	go build -o bin/server ./cmd/server
+	mvn -q -B compile
 
-migrate:
-	go run ./cmd/migrate up
+package:
+	mvn -q -B package -DskipTests
 
 test:
-	go test ./...
-
-lint:
-	golangci-lint run
+	mvn -q -B test
 
 docker-up:
 	docker-compose up -d
@@ -19,7 +16,4 @@ docker-down:
 	docker-compose down
 
 run:
-	go run ./cmd/server
-
-generate:
-	go generate ./...
+	mvn -q spring-boot:run

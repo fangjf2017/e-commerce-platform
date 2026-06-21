@@ -1,21 +1,21 @@
 # Stage 1: builder
-FROM golang:1.24-alpine AS builder
+FROM maven:3.9-eclipse-temurin-21 AS builder
 
 WORKDIR /build
 
-COPY go.mod go.sum ./
-RUN go mod download
+COPY pom.xml ./
+RUN mvn -q -B dependency:go-offline
 
-COPY . .
-RUN go build -o /app/server ./cmd/server
+COPY src ./src
+RUN mvn -q -B package -DskipTests
 
 # Stage 2: final
-FROM alpine:3.21
+FROM eclipse-temurin:21-jre-alpine
 
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache tzdata
 
-COPY --from=builder /app/server /app/server
+COPY --from=builder /build/target/feature-management-service-*.jar /app/app.jar
 
 EXPOSE 8080
 
-CMD ["/app/server"]
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

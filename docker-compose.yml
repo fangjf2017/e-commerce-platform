@@ -41,8 +41,11 @@ services:
       redis:
         condition: service_healthy
     environment:
-      DB_URL: postgres://fms:fmspass@postgres:5432/featureflags?sslmode=disable
-      REDIS_URL: redis://redis:6379
+      DB_URL: jdbc:postgresql://postgres:5432/featureflags
+      DB_USER: fms
+      DB_PASSWORD: fmspass
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
       SERVER_PORT: 8080
 
   prometheus:

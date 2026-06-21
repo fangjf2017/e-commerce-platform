@@ -50,7 +50,7 @@ This is an intentional trade-off: strict consistency would require network round
 
 ## Component Overview
 
-### REST API (chi router)
+### REST API (Spring MVC)
 
 The HTTP layer handles both management operations (CRUD on flags, rules, segments) and evaluation requests. It is responsible for:
 
@@ -80,7 +80,7 @@ The engine is stateless and goroutine-safe. Multiple goroutines evaluate differe
 
 A three-tier read-through cache in front of PostgreSQL.
 
-- **L1 (ristretto)**: An in-process cache using the [ristretto](https://github.com/dgraph-io/ristretto) library with TinyLFU eviction. This is the fastest possible path: a memory lookup with ~200ns latency. Each FMS instance has its own L1; there is no coordination between instances at this tier.
+- **L1 (Caffeine)**: An in-process cache using the [Caffeine](https://github.com/ben-manes/caffeine) library with window-TinyLFU eviction. This is the fastest possible path: a memory lookup with ~200ns latency. Each FMS instance has its own L1; there is no coordination between instances at this tier.
 - **L2 (Redis 7)**: A shared Redis cache accessible to all instances. When L1 misses, the engine queries Redis. If found, the value is stored back into L1. Redis latency is ~1ms over the internal network.
 - **L3 (PostgreSQL 16)**: The database is the source of truth. It is only read when both L1 and L2 miss. After a DB read, the result is written into both L2 and L1. A `singleflight.Group` prevents multiple goroutines from issuing redundant DB reads for the same flag key simultaneously.
 
@@ -160,7 +160,7 @@ applications
 
 | Tier | Technology | TTL | Latency | Capacity |
 |------|-----------|-----|---------|---------|
-| L1 | ristretto (in-process, TinyLFU eviction) | 30s | ~200ns | 256MB/instance |
+| L1 | Caffeine (in-process, TinyLFU eviction) | 30s | ~200ns | 256MB/instance |
 | L2 | Redis 7 | 5min | ~1ms | Cluster-scalable |
 | L3 | PostgreSQL 16 | Permanent | ~5ms | Source of truth |
 
@@ -197,7 +197,7 @@ Request arrives
 1. Handler validates and writes mutation to PostgreSQL. The UPDATE includes `version = version + 1`. An audit event INSERT runs in the same transaction.
 2. On successful COMMIT, the handler publishes `{flagKey}` to `ff:invalidate:{appID}:{envID}` on Redis.
 3. All FMS instances receive the pub/sub message and:
-   a. Evict `ff:{appID}:{envID}:{flagKey}` from L1 (ristretto `Del`)
+   a. Evict `ff:{appID}:{envID}:{flagKey}` from L1 (Caffeine `invalidate`)
    b. Issue `DEL ff:{appID}:{envID}:{flagKey}` to Redis (L2 eviction)
 4. The first evaluation after invalidation re-warms L2 from DB, then L1 from L2.
 
