@@ -1,0 +1,19 @@
+{
+  "name": "@ecommerce/featureflags-sdk",
+  "version": "1.0.0",
+  "description": "Feature Flags SDK for TypeScript/JavaScript",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts"
+  },
+  "files": ["dist"],
+  "keywords": ["feature-flags", "feature-management", "ab-testing"],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}
