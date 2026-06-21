@@ -6,15 +6,15 @@ import (
 )
 
 type Metrics struct {
-	FlagEvaluationsTotal     *prometheus.CounterVec
-	EvaluationDuration       *prometheus.HistogramVec
-	CacheHitsTotal           *prometheus.CounterVec
-	CacheMissesTotal         *prometheus.CounterVec
-	CacheInvalidationsTotal  *prometheus.CounterVec
-	FlagUpdatesTotal         *prometheus.CounterVec
-	ActiveFlagsGauge         *prometheus.GaugeVec
-	HTTPRequestsTotal        *prometheus.CounterVec
-	HTTPRequestDuration      *prometheus.HistogramVec
+	FlagEvaluationsTotal    *prometheus.CounterVec
+	EvaluationDuration      *prometheus.HistogramVec
+	CacheHitsTotal          *prometheus.CounterVec
+	CacheMissesTotal        *prometheus.CounterVec
+	CacheInvalidationsTotal *prometheus.CounterVec
+	FlagUpdatesTotal        *prometheus.CounterVec
+	ActiveFlagsGauge        *prometheus.GaugeVec
+	HTTPRequestsTotal       *prometheus.CounterVec
+	HTTPRequestDuration     *prometheus.HistogramVec
 }
 
 func NewMetrics() *Metrics {

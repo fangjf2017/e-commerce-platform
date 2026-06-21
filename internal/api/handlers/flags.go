@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/ecommerce/feature-management/internal/api"
+	"github.com/ecommerce/feature-management/internal/api/apiutil"
 	"github.com/ecommerce/feature-management/internal/domain"
 	"github.com/ecommerce/feature-management/internal/service"
 )
@@ -39,37 +39,37 @@ type updateFlagRequest struct {
 
 // Create handles POST /v1/applications/{appID}/environments/{envID}/flags.
 func (h *FlagHandler) Create(w http.ResponseWriter, r *http.Request) {
-	appID, err := api.ParseUUID(chi.URLParam(r, "appID"))
+	appID, err := apiutil.ParseUUID(chi.URLParam(r, "appID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
 		return
 	}
-	envID, err := api.ParseUUID(chi.URLParam(r, "envID"))
+	envID, err := apiutil.ParseUUID(chi.URLParam(r, "envID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
 		return
 	}
 
 	var req createFlagRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
 		return
 	}
 
 	if req.Key == "" {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "key is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "key is required")
 		return
 	}
 	if req.Name == "" {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "name is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "name is required")
 		return
 	}
 	if req.Type == "" {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "type is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "type is required")
 		return
 	}
 	if len(req.DefaultValue) == 0 {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "default_value is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "default_value is required")
 		return
 	}
 
@@ -87,28 +87,28 @@ func (h *FlagHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Actor:         actor,
 	})
 	if err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
-	api.JSON(w, http.StatusCreated, api.Response{Data: flag})
+	apiutil.JSON(w, http.StatusCreated, apiutil.Response{Data: flag})
 }
 
 // List handles GET /v1/applications/{appID}/environments/{envID}/flags.
 func (h *FlagHandler) List(w http.ResponseWriter, r *http.Request) {
-	appID, err := api.ParseUUID(chi.URLParam(r, "appID"))
+	appID, err := apiutil.ParseUUID(chi.URLParam(r, "appID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
 		return
 	}
-	envID, err := api.ParseUUID(chi.URLParam(r, "envID"))
+	envID, err := apiutil.ParseUUID(chi.URLParam(r, "envID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
 		return
 	}
 
-	limit := api.ParseIntQuery(r, "limit", 20)
-	offset := api.ParseIntQuery(r, "offset", 0)
+	limit := apiutil.ParseIntQuery(r, "limit", 20)
+	offset := apiutil.ParseIntQuery(r, "offset", 0)
 
 	flags, total, err := h.svc.List(r.Context(), service.ListFlagsInput{
 		ApplicationID: appID,
@@ -117,13 +117,13 @@ func (h *FlagHandler) List(w http.ResponseWriter, r *http.Request) {
 		Offset:        offset,
 	})
 	if err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
-	api.JSON(w, http.StatusOK, api.Response{
+	apiutil.JSON(w, http.StatusOK, apiutil.Response{
 		Data: flags,
-		Meta: &api.Meta{
+		Meta: &apiutil.Meta{
 			Total:  total,
 			Limit:  limit,
 			Offset: offset,
@@ -133,49 +133,49 @@ func (h *FlagHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /v1/applications/{appID}/environments/{envID}/flags/{flagKey}.
 func (h *FlagHandler) Get(w http.ResponseWriter, r *http.Request) {
-	appID, err := api.ParseUUID(chi.URLParam(r, "appID"))
+	appID, err := apiutil.ParseUUID(chi.URLParam(r, "appID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
 		return
 	}
-	envID, err := api.ParseUUID(chi.URLParam(r, "envID"))
+	envID, err := apiutil.ParseUUID(chi.URLParam(r, "envID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
 		return
 	}
 	flagKey := chi.URLParam(r, "flagKey")
 
 	flag, err := h.svc.Get(r.Context(), appID, envID, flagKey)
 	if err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
-	api.JSON(w, http.StatusOK, api.Response{Data: flag})
+	apiutil.JSON(w, http.StatusOK, apiutil.Response{Data: flag})
 }
 
 // Update handles PUT /v1/applications/{appID}/environments/{envID}/flags/{flagKey}.
 func (h *FlagHandler) Update(w http.ResponseWriter, r *http.Request) {
-	appID, err := api.ParseUUID(chi.URLParam(r, "appID"))
+	appID, err := apiutil.ParseUUID(chi.URLParam(r, "appID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
 		return
 	}
-	envID, err := api.ParseUUID(chi.URLParam(r, "envID"))
+	envID, err := apiutil.ParseUUID(chi.URLParam(r, "envID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
 		return
 	}
 	flagKey := chi.URLParam(r, "flagKey")
 
 	var req updateFlagRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
 		return
 	}
 
 	if req.Name == "" {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "name is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "name is required")
 		return
 	}
 
@@ -189,31 +189,30 @@ func (h *FlagHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Actor:        actor,
 	})
 	if err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
-	api.JSON(w, http.StatusOK, api.Response{Data: flag})
+	apiutil.JSON(w, http.StatusOK, apiutil.Response{Data: flag})
 }
 
 // Delete handles DELETE /v1/applications/{appID}/environments/{envID}/flags/{flagKey}.
 func (h *FlagHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	appID, err := api.ParseUUID(chi.URLParam(r, "appID"))
+	appID, err := apiutil.ParseUUID(chi.URLParam(r, "appID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
 		return
 	}
-	envID, err := api.ParseUUID(chi.URLParam(r, "envID"))
+	envID, err := apiutil.ParseUUID(chi.URLParam(r, "envID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
 		return
 	}
 	flagKey := chi.URLParam(r, "flagKey")
-
 	actor := actorFromRequest(r)
 
 	if err := h.svc.Delete(r.Context(), appID, envID, flagKey, actor); err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
@@ -236,14 +235,14 @@ func (h *FlagHandler) Archive(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *FlagHandler) setStatus(w http.ResponseWriter, r *http.Request, status domain.FlagStatus) {
-	appID, err := api.ParseUUID(chi.URLParam(r, "appID"))
+	appID, err := apiutil.ParseUUID(chi.URLParam(r, "appID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
 		return
 	}
-	envID, err := api.ParseUUID(chi.URLParam(r, "envID"))
+	envID, err := apiutil.ParseUUID(chi.URLParam(r, "envID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
 		return
 	}
 	flagKey := chi.URLParam(r, "flagKey")
@@ -251,9 +250,9 @@ func (h *FlagHandler) setStatus(w http.ResponseWriter, r *http.Request, status d
 
 	flag, err := h.svc.SetStatus(r.Context(), appID, envID, flagKey, status, actor)
 	if err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
-	api.JSON(w, http.StatusOK, api.Response{Data: flag})
+	apiutil.JSON(w, http.StatusOK, apiutil.Response{Data: flag})
 }

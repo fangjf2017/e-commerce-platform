@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/ecommerce/feature-management/internal/api"
+	"github.com/ecommerce/feature-management/internal/api/apiutil"
 	"github.com/ecommerce/feature-management/internal/service"
 )
 
@@ -33,24 +33,24 @@ type updateEnvironmentRequest struct {
 
 // Create handles POST /v1/applications/{appID}/environments.
 func (h *EnvironmentHandler) Create(w http.ResponseWriter, r *http.Request) {
-	appID, err := api.ParseUUID(chi.URLParam(r, "appID"))
+	appID, err := apiutil.ParseUUID(chi.URLParam(r, "appID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
 		return
 	}
 
 	var req createEnvironmentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
 		return
 	}
 
 	if req.Name == "" {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "name is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "name is required")
 		return
 	}
 	if req.Slug == "" {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "slug is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "slug is required")
 		return
 	}
 
@@ -64,33 +64,33 @@ func (h *EnvironmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Actor:            actor,
 	})
 	if err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
-	api.JSON(w, http.StatusCreated, api.Response{Data: env})
+	apiutil.JSON(w, http.StatusCreated, apiutil.Response{Data: env})
 }
 
 // List handles GET /v1/applications/{appID}/environments.
 func (h *EnvironmentHandler) List(w http.ResponseWriter, r *http.Request) {
-	appID, err := api.ParseUUID(chi.URLParam(r, "appID"))
+	appID, err := apiutil.ParseUUID(chi.URLParam(r, "appID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
 		return
 	}
 
-	limit := api.ParseIntQuery(r, "limit", 20)
-	offset := api.ParseIntQuery(r, "offset", 0)
+	limit := apiutil.ParseIntQuery(r, "limit", 20)
+	offset := apiutil.ParseIntQuery(r, "offset", 0)
 
 	envs, total, err := h.svc.ListEnvironments(r.Context(), appID, limit, offset)
 	if err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
-	api.JSON(w, http.StatusOK, api.Response{
+	apiutil.JSON(w, http.StatusOK, apiutil.Response{
 		Data: envs,
-		Meta: &api.Meta{
+		Meta: &apiutil.Meta{
 			Total:  total,
 			Limit:  limit,
 			Offset: offset,
@@ -100,32 +100,32 @@ func (h *EnvironmentHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Get handles GET /v1/applications/{appID}/environments/{envID}.
 func (h *EnvironmentHandler) Get(w http.ResponseWriter, r *http.Request) {
-	envID, err := api.ParseUUID(chi.URLParam(r, "envID"))
+	envID, err := apiutil.ParseUUID(chi.URLParam(r, "envID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
 		return
 	}
 
 	env, err := h.svc.GetEnvironment(r.Context(), envID)
 	if err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
-	api.JSON(w, http.StatusOK, api.Response{Data: env})
+	apiutil.JSON(w, http.StatusOK, apiutil.Response{Data: env})
 }
 
 // Update handles PATCH /v1/applications/{appID}/environments/{envID}.
 func (h *EnvironmentHandler) Update(w http.ResponseWriter, r *http.Request) {
-	envID, err := api.ParseUUID(chi.URLParam(r, "envID"))
+	envID, err := apiutil.ParseUUID(chi.URLParam(r, "envID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
 		return
 	}
 
 	var req updateEnvironmentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
 		return
 	}
 
@@ -137,25 +137,25 @@ func (h *EnvironmentHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Actor:            actor,
 	})
 	if err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
-	api.JSON(w, http.StatusOK, api.Response{Data: env})
+	apiutil.JSON(w, http.StatusOK, apiutil.Response{Data: env})
 }
 
 // Delete handles DELETE /v1/applications/{appID}/environments/{envID}.
 func (h *EnvironmentHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	envID, err := api.ParseUUID(chi.URLParam(r, "envID"))
+	envID, err := apiutil.ParseUUID(chi.URLParam(r, "envID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
 		return
 	}
 
 	actor := actorFromRequest(r)
 
 	if err := h.svc.DeleteEnvironment(r.Context(), envID, actor); err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 

@@ -1,102 +1,39 @@
+// Package api wires together handlers, middleware and the chi router.
+// The shared HTTP helper types and functions live in the apiutil sub-package
+// so that the handlers sub-package can import them without creating a cycle.
 package api
 
 import (
-	"encoding/json"
-	"errors"
-	"net/http"
-	"strconv"
-
-	"github.com/google/uuid"
-
-	"github.com/ecommerce/feature-management/internal/domain"
+	"github.com/ecommerce/feature-management/internal/api/apiutil"
 )
 
+// Re-export the shared types so callers that only import "api" still work.
+
 // Response is the standard success envelope.
-type Response struct {
-	Data interface{} `json:"data"`
-	Meta *Meta       `json:"meta,omitempty"`
-}
+type Response = apiutil.Response
 
 // Meta carries pagination and request metadata.
-type Meta struct {
-	Total     int    `json:"total,omitempty"`
-	Limit     int    `json:"limit,omitempty"`
-	Offset    int    `json:"offset,omitempty"`
-	RequestID string `json:"request_id,omitempty"`
-}
+type Meta = apiutil.Meta
 
 // ErrorResponse is the standard error envelope.
-type ErrorResponse struct {
-	Error ErrorDetail `json:"error"`
-}
+type ErrorResponse = apiutil.ErrorResponse
 
 // ErrorDetail contains the machine-readable error code and human message.
-type ErrorDetail struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-}
+type ErrorDetail = apiutil.ErrorDetail
 
-// JSON writes a JSON response with the given status code.
-func JSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if data != nil {
-		_ = json.NewEncoder(w).Encode(data)
-	}
-}
+// Re-export functions from apiutil so handlers importing "api" can use them directly.
 
-// JSONError writes a JSON error response.
-func JSONError(w http.ResponseWriter, status int, code, message string) {
-	JSON(w, status, ErrorResponse{
-		Error: ErrorDetail{
-			Code:    code,
-			Message: message,
-		},
-	})
-}
+// JSON writes a JSON response.
+var JSON = apiutil.JSON
 
-// HandleError maps domain errors to HTTP responses.
-func HandleError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, domain.ErrNotFound),
-		errors.Is(err, domain.ErrFlagNotFound),
-		errors.Is(err, domain.ErrRuleNotFound),
-		errors.Is(err, domain.ErrSegmentNotFound),
-		errors.Is(err, domain.ErrApplicationNotFound),
-		errors.Is(err, domain.ErrEnvironmentNotFound):
-		JSONError(w, http.StatusNotFound, "not_found", err.Error())
+// JSONError writes a structured JSON error response.
+var JSONError = apiutil.JSONError
 
-	case errors.Is(err, domain.ErrAlreadyExists):
-		JSONError(w, http.StatusConflict, "already_exists", err.Error())
+// HandleError maps domain errors to HTTP status codes.
+var HandleError = apiutil.HandleError
 
-	case errors.Is(err, domain.ErrVersionConflict):
-		JSONError(w, http.StatusConflict, "version_conflict", err.Error())
+// ParseUUID parses a UUID string.
+var ParseUUID = apiutil.ParseUUID
 
-	case errors.Is(err, domain.ErrInvalidInput):
-		JSONError(w, http.StatusBadRequest, "invalid_input", err.Error())
-
-	case errors.Is(err, domain.ErrFlagArchived):
-		JSONError(w, http.StatusUnprocessableEntity, "flag_archived", err.Error())
-
-	default:
-		JSONError(w, http.StatusInternalServerError, "internal_error", "an internal error occurred")
-	}
-}
-
-// ParseUUID parses a UUID string and returns an error if invalid.
-func ParseUUID(s string) (uuid.UUID, error) {
-	return uuid.Parse(s)
-}
-
-// ParseIntQuery reads an integer query parameter, returning def if missing or unparseable.
-func ParseIntQuery(r *http.Request, key string, def int) int {
-	v := r.URL.Query().Get(key)
-	if v == "" {
-		return def
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil {
-		return def
-	}
-	return n
-}
+// ParseIntQuery reads an integer query parameter.
+var ParseIntQuery = apiutil.ParseIntQuery

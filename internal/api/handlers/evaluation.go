@@ -7,7 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/ecommerce/feature-management/internal/api"
+	"github.com/ecommerce/feature-management/internal/api/apiutil"
+	"github.com/ecommerce/feature-management/internal/api/middleware"
 	"github.com/ecommerce/feature-management/internal/domain"
 	"github.com/ecommerce/feature-management/internal/service"
 )
@@ -40,32 +41,40 @@ type batchEvaluateRequest struct {
 	FlagKeys      []string               `json:"flag_keys"`
 }
 
+// requestIDFromContext extracts the request ID stored by the logging middleware.
+func requestIDFromContext(r *http.Request) string {
+	v := r.Context().Value(middleware.RequestIDKey)
+	if v == nil {
+		return ""
+	}
+	s, _ := v.(string)
+	return s
+}
+
 // Evaluate handles POST /v1/evaluate.
 func (h *EvaluationHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 	var req evaluateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
 		return
 	}
 
 	if req.ApplicationID == uuid.Nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "application_id is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "application_id is required")
 		return
 	}
 	if req.EnvironmentID == uuid.Nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "environment_id is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "environment_id is required")
 		return
 	}
 	if req.FlagKey == "" {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "flag_key is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "flag_key is required")
 		return
 	}
 	if req.EntityID == "" {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "entity_id is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "entity_id is required")
 		return
 	}
-
-	requestID := api.RequestIDFromContext(r.Context())
 
 	ec := domain.EvaluationContext{
 		FlagKey:       req.FlagKey,
@@ -74,37 +83,37 @@ func (h *EvaluationHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 		EntityID:      req.EntityID,
 		EntityType:    req.EntityType,
 		Attributes:    req.Attributes,
-		RequestID:     requestID,
+		RequestID:     requestIDFromContext(r),
 		Timestamp:     time.Now().UTC(),
 	}
 
 	result, err := h.svc.Evaluate(r.Context(), ec)
 	if err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
-	api.JSON(w, http.StatusOK, api.Response{Data: result})
+	apiutil.JSON(w, http.StatusOK, apiutil.Response{Data: result})
 }
 
 // BatchEvaluate handles POST /v1/evaluate/batch.
 func (h *EvaluationHandler) BatchEvaluate(w http.ResponseWriter, r *http.Request) {
 	var req batchEvaluateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
 		return
 	}
 
 	if req.ApplicationID == uuid.Nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "application_id is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "application_id is required")
 		return
 	}
 	if req.EnvironmentID == uuid.Nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "environment_id is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "environment_id is required")
 		return
 	}
 	if req.EntityID == "" {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "entity_id is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "entity_id is required")
 		return
 	}
 
@@ -119,45 +128,44 @@ func (h *EvaluationHandler) BatchEvaluate(w http.ResponseWriter, r *http.Request
 
 	results, err := h.svc.BatchEvaluate(r.Context(), batchReq)
 	if err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
-	api.JSON(w, http.StatusOK, api.Response{
+	apiutil.JSON(w, http.StatusOK, apiutil.Response{
 		Data: results,
-		Meta: &api.Meta{
+		Meta: &apiutil.Meta{
 			Total: len(results),
 		},
 	})
 }
 
 // DryRun handles POST /v1/evaluate/dry-run.
-// It behaves identically to Evaluate but bypasses any caching side-effects.
+// Behaves like Evaluate but routes through EvaluationService.DryRun which
+// bypasses cache side-effects.
 func (h *EvaluationHandler) DryRun(w http.ResponseWriter, r *http.Request) {
 	var req evaluateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
 		return
 	}
 
 	if req.ApplicationID == uuid.Nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "application_id is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "application_id is required")
 		return
 	}
 	if req.EnvironmentID == uuid.Nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "environment_id is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "environment_id is required")
 		return
 	}
 	if req.FlagKey == "" {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "flag_key is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "flag_key is required")
 		return
 	}
 	if req.EntityID == "" {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "entity_id is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "entity_id is required")
 		return
 	}
-
-	requestID := api.RequestIDFromContext(r.Context())
 
 	ec := domain.EvaluationContext{
 		FlagKey:       req.FlagKey,
@@ -166,15 +174,15 @@ func (h *EvaluationHandler) DryRun(w http.ResponseWriter, r *http.Request) {
 		EntityID:      req.EntityID,
 		EntityType:    req.EntityType,
 		Attributes:    req.Attributes,
-		RequestID:     requestID,
+		RequestID:     requestIDFromContext(r),
 		Timestamp:     time.Now().UTC(),
 	}
 
 	result, err := h.svc.DryRun(r.Context(), ec)
 	if err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
-	api.JSON(w, http.StatusOK, api.Response{Data: result})
+	apiutil.JSON(w, http.StatusOK, apiutil.Response{Data: result})
 }

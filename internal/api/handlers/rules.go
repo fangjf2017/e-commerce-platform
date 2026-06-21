@@ -8,7 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
-	"github.com/ecommerce/feature-management/internal/api"
+	"github.com/ecommerce/feature-management/internal/api/apiutil"
 	"github.com/ecommerce/feature-management/internal/domain"
 	"github.com/ecommerce/feature-management/internal/service"
 )
@@ -60,33 +60,33 @@ type reorderRulesRequest struct {
 
 // Create handles POST /v1/applications/{appID}/environments/{envID}/flags/{flagKey}/rules.
 func (h *RuleHandler) Create(w http.ResponseWriter, r *http.Request) {
-	appID, err := api.ParseUUID(chi.URLParam(r, "appID"))
+	appID, err := apiutil.ParseUUID(chi.URLParam(r, "appID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
 		return
 	}
-	envID, err := api.ParseUUID(chi.URLParam(r, "envID"))
+	envID, err := apiutil.ParseUUID(chi.URLParam(r, "envID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
 		return
 	}
 	flagKey := chi.URLParam(r, "flagKey")
 
-	// Fetch the flag to get its ID.
+	// Fetch the flag to obtain its UUID.
 	flag, err := h.svc.Get(r.Context(), appID, envID, flagKey)
 	if err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
 	var req createRuleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
 		return
 	}
 
 	if req.Type == "" {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "type is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "type is required")
 		return
 	}
 
@@ -106,36 +106,36 @@ func (h *RuleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Actor:         actor,
 	})
 	if err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
-	api.JSON(w, http.StatusCreated, api.Response{Data: rule})
+	apiutil.JSON(w, http.StatusCreated, apiutil.Response{Data: rule})
 }
 
 // List handles GET /v1/applications/{appID}/environments/{envID}/flags/{flagKey}/rules.
 func (h *RuleHandler) List(w http.ResponseWriter, r *http.Request) {
-	appID, err := api.ParseUUID(chi.URLParam(r, "appID"))
+	appID, err := apiutil.ParseUUID(chi.URLParam(r, "appID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
 		return
 	}
-	envID, err := api.ParseUUID(chi.URLParam(r, "envID"))
+	envID, err := apiutil.ParseUUID(chi.URLParam(r, "envID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
 		return
 	}
 	flagKey := chi.URLParam(r, "flagKey")
 
 	flag, err := h.svc.Get(r.Context(), appID, envID, flagKey)
 	if err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
-	api.JSON(w, http.StatusOK, api.Response{
+	apiutil.JSON(w, http.StatusOK, apiutil.Response{
 		Data: flag.Rules,
-		Meta: &api.Meta{
+		Meta: &apiutil.Meta{
 			Total: len(flag.Rules),
 		},
 	})
@@ -143,20 +143,20 @@ func (h *RuleHandler) List(w http.ResponseWriter, r *http.Request) {
 
 // Update handles PUT /v1/applications/{appID}/environments/{envID}/flags/{flagKey}/rules/{ruleID}.
 func (h *RuleHandler) Update(w http.ResponseWriter, r *http.Request) {
-	ruleID, err := api.ParseUUID(chi.URLParam(r, "ruleID"))
+	ruleID, err := apiutil.ParseUUID(chi.URLParam(r, "ruleID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "ruleID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "ruleID must be a valid UUID")
 		return
 	}
 
 	var req updateRuleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
 		return
 	}
 
 	if req.Type == "" {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "type is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "type is required")
 		return
 	}
 
@@ -175,25 +175,25 @@ func (h *RuleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Actor:         actor,
 	})
 	if err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
-	api.JSON(w, http.StatusOK, api.Response{Data: rule})
+	apiutil.JSON(w, http.StatusOK, apiutil.Response{Data: rule})
 }
 
 // Delete handles DELETE /v1/applications/{appID}/environments/{envID}/flags/{flagKey}/rules/{ruleID}.
 func (h *RuleHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	ruleID, err := api.ParseUUID(chi.URLParam(r, "ruleID"))
+	ruleID, err := apiutil.ParseUUID(chi.URLParam(r, "ruleID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "ruleID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "ruleID must be a valid UUID")
 		return
 	}
 
 	actor := actorFromRequest(r)
 
 	if err := h.svc.DeleteRule(r.Context(), ruleID, actor); err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
@@ -202,46 +202,46 @@ func (h *RuleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // Reorder handles PUT /v1/applications/{appID}/environments/{envID}/flags/{flagKey}/rules/reorder.
 func (h *RuleHandler) Reorder(w http.ResponseWriter, r *http.Request) {
-	appID, err := api.ParseUUID(chi.URLParam(r, "appID"))
+	appID, err := apiutil.ParseUUID(chi.URLParam(r, "appID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "appID must be a valid UUID")
 		return
 	}
-	envID, err := api.ParseUUID(chi.URLParam(r, "envID"))
+	envID, err := apiutil.ParseUUID(chi.URLParam(r, "envID"))
 	if err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_id", "envID must be a valid UUID")
 		return
 	}
 	flagKey := chi.URLParam(r, "flagKey")
 
 	flag, err := h.svc.Get(r.Context(), appID, envID, flagKey)
 	if err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
 	var req reorderRulesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		api.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_body", "request body is not valid JSON")
 		return
 	}
 
 	if len(req.RuleIDs) == 0 {
-		api.JSONError(w, http.StatusBadRequest, "invalid_input", "rule_ids is required")
+		apiutil.JSONError(w, http.StatusBadRequest, "invalid_input", "rule_ids is required and must not be empty")
 		return
 	}
 
 	actor := actorFromRequest(r)
 
 	if err := h.svc.ReorderRules(r.Context(), flag.ID, req.RuleIDs, actor); err != nil {
-		api.HandleError(w, err)
+		apiutil.HandleError(w, err)
 		return
 	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// toConditionInputs converts API condition requests to service inputs.
+// toConditionInputs converts API condition requests to service layer inputs.
 func toConditionInputs(reqs []conditionReq) []service.ConditionInput {
 	if len(reqs) == 0 {
 		return nil

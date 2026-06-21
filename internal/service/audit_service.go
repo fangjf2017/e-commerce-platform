@@ -2,29 +2,55 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ecommerce/feature-management/internal/domain"
 	"github.com/ecommerce/feature-management/internal/repository"
 	"github.com/google/uuid"
 )
 
-// AuditService provides read access to audit events.
+// AuditService provides access to audit event history.
 type AuditService struct {
-	auditRepo *repository.AuditRepo
+	repo *repository.AuditRepo
 }
 
 // NewAuditService creates a new AuditService.
-func NewAuditService(auditRepo *repository.AuditRepo) *AuditService {
-	return &AuditService{auditRepo: auditRepo}
+func NewAuditService(repo *repository.AuditRepo) *AuditService {
+	return &AuditService{repo: repo}
 }
 
-// List returns paginated audit events for an application.
-func (s *AuditService) List(ctx context.Context, appID uuid.UUID, limit, offset int) ([]*domain.AuditEvent, error) {
-	if limit <= 0 || limit > 200 {
-		limit = 50
+// List returns paginated audit events for an application with optional filters.
+// Uses the ListAuditInput type defined in service.go.
+func (s *AuditService) List(ctx context.Context, inp ListAuditInput) ([]*domain.AuditEvent, int, error) {
+	filter := repository.ListAuditFilter{
+		Limit:  inp.Limit,
+		Offset: inp.Offset,
+		After:  inp.After,
+		Before: inp.Before,
 	}
-	if offset < 0 {
-		offset = 0
+	if inp.ResourceType != "" {
+		filter.ResourceType = &inp.ResourceType
 	}
-	return s.auditRepo.List(ctx, appID, limit, offset)
+	if inp.Action != "" {
+		action := domain.AuditAction(inp.Action)
+		filter.Action = &action
+	}
+	if inp.ActorID != "" {
+		filter.ActorID = &inp.ActorID
+	}
+
+	events, total, err := s.repo.List(ctx, inp.ApplicationID, filter)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list audit events: %w", err)
+	}
+	return events, total, nil
+}
+
+// GetEvent returns a single audit event by ID.
+func (s *AuditService) GetEvent(ctx context.Context, id uuid.UUID) (*domain.AuditEvent, error) {
+	event, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("get audit event: %w", err)
+	}
+	return event, nil
 }

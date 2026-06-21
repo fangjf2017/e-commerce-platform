@@ -6,80 +6,38 @@ import (
 
 	"github.com/ecommerce/feature-management/internal/domain"
 	"github.com/ecommerce/feature-management/internal/evaluator"
-	"github.com/ecommerce/feature-management/internal/observability"
-	"github.com/google/uuid"
 )
 
-// EvaluationService wraps the evaluator engine and records metrics.
+// EvaluationService wraps the evaluator Engine for flag evaluation.
 type EvaluationService struct {
-	engine  *evaluator.Engine
-	metrics *observability.Metrics
+	engine *evaluator.Engine
 }
 
 // NewEvaluationService creates a new EvaluationService.
-func NewEvaluationService(engine *evaluator.Engine, metrics *observability.Metrics) *EvaluationService {
-	return &EvaluationService{engine: engine, metrics: metrics}
+func NewEvaluationService(engine *evaluator.Engine) *EvaluationService {
+	return &EvaluationService{engine: engine}
 }
 
-// Evaluate evaluates a single feature flag.
-func (s *EvaluationService) Evaluate(ctx context.Context, evalCtx *domain.EvaluationContext) (*domain.EvaluationResult, error) {
-	start := time.Now()
-
-	result, err := s.engine.Evaluate(ctx, evalCtx)
-	if err != nil {
-		if s.metrics != nil {
-			s.metrics.FlagEvaluationsTotal.WithLabelValues(
-				evalCtx.FlagKey,
-				evalCtx.EnvironmentID.String(),
-				"error",
-				"",
-			).Inc()
-		}
-		return nil, err
+// Evaluate resolves a single feature flag for the provided context.
+// Accepts a value (not pointer) to match the handler call site.
+func (s *EvaluationService) Evaluate(ctx context.Context, req domain.EvaluationContext) (*domain.EvaluationResult, error) {
+	if req.Timestamp.IsZero() {
+		req.Timestamp = time.Now().UTC()
 	}
-
-	duration := time.Since(start).Seconds()
-
-	if s.metrics != nil {
-		resultLabel := "false"
-		if result.Enabled {
-			resultLabel = "true"
-		}
-		s.metrics.FlagEvaluationsTotal.WithLabelValues(
-			result.FlagKey,
-			evalCtx.EnvironmentID.String(),
-			resultLabel,
-			result.CacheLayer,
-		).Inc()
-		s.metrics.EvaluationDuration.WithLabelValues(
-			result.FlagKey,
-			evalCtx.EnvironmentID.String(),
-		).Observe(duration)
-	}
-
-	return result, nil
+	return s.engine.Evaluate(ctx, &req)
 }
 
-// BatchEvaluate evaluates multiple feature flags for a single entity.
-func (s *EvaluationService) BatchEvaluate(ctx context.Context, req *domain.BatchEvaluationRequest) ([]*domain.EvaluationResult, error) {
-	return s.engine.BatchEvaluate(ctx, req)
+// BatchEvaluate resolves multiple feature flags for the same entity context.
+// When FlagKeys is empty, all active flags for the environment are evaluated.
+// Accepts a value (not pointer) to match the handler call site.
+func (s *EvaluationService) BatchEvaluate(ctx context.Context, req domain.BatchEvaluationRequest) ([]*domain.EvaluationResult, error) {
+	return s.engine.BatchEvaluate(ctx, &req)
 }
 
-// EvaluateByKey is a convenience method that builds the EvaluationContext from parts.
-func (s *EvaluationService) EvaluateByKey(
-	ctx context.Context,
-	appID, envID uuid.UUID,
-	flagKey, entityID, entityType string,
-	attributes map[string]interface{},
-) (*domain.EvaluationResult, error) {
-	evalCtx := &domain.EvaluationContext{
-		FlagKey:       flagKey,
-		ApplicationID: appID,
-		EnvironmentID: envID,
-		EntityID:      entityID,
-		EntityType:    entityType,
-		Attributes:    attributes,
-		Timestamp:     time.Now().UTC(),
-	}
-	return s.Evaluate(ctx, evalCtx)
+// DryRun evaluates a flag without warming the cache — used for testing rules.
+// It sets the timestamp to now and delegates to the engine.
+// Accepts a value (not pointer) to match the handler call site.
+func (s *EvaluationService) DryRun(ctx context.Context, req domain.EvaluationContext) (*domain.EvaluationResult, error) {
+	req.Timestamp = time.Now().UTC()
+	return s.engine.Evaluate(ctx, &req)
 }

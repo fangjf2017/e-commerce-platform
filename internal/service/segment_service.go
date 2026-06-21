@@ -6,158 +6,205 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ecommerce/feature-management/internal/cache"
 	"github.com/ecommerce/feature-management/internal/domain"
 	"github.com/ecommerce/feature-management/internal/repository"
 	"github.com/google/uuid"
 )
 
-// CreateSegmentRequest carries the input for creating a segment.
-type CreateSegmentRequest struct {
-	ApplicationID uuid.UUID             `json:"application_id" validate:"required"`
-	Name          string                `json:"name"           validate:"required,min=1,max=256"`
-	Description   string                `json:"description"`
-	Operator      domain.SegmentOperator `json:"operator"      validate:"required,oneof=all any"`
-	Rules         []SegmentRuleRequest  `json:"rules"`
+// SegmentRuleInput represents a single rule within a segment.
+type SegmentRuleInput struct {
+	Attribute string
+	Operator  domain.ConditionOperator
+	Value     []byte
 }
 
-// SegmentRuleRequest carries the input for a single segment rule.
-type SegmentRuleRequest struct {
-	Attribute string                  `json:"attribute" validate:"required"`
-	Operator  domain.ConditionOperator `json:"operator"  validate:"required"`
-	Value     json.RawMessage         `json:"value"     validate:"required"`
+// CreateSegmentInput holds all fields needed to create a segment.
+type CreateSegmentInput struct {
+	ApplicationID uuid.UUID
+	Name          string
+	Description   string
+	Operator      domain.SegmentOperator
+	Rules         []SegmentRuleInput
+	Actor         domain.AuditActor
 }
 
-// SegmentService manages segment CRUD.
+// ListSegmentsInput holds filter and pagination for listing segments.
+type ListSegmentsInput struct {
+	ApplicationID uuid.UUID
+	Limit         int
+	Offset        int
+}
+
+// UpdateSegmentInput holds mutable fields for a segment update.
+type UpdateSegmentInput struct {
+	Name        string
+	Description string
+	Operator    domain.SegmentOperator
+	Rules       []SegmentRuleInput
+	Actor       domain.AuditActor
+}
+
+// SegmentService manages user segments.
 type SegmentService struct {
-	segmentRepo *repository.SegmentRepo
-	auditRepo   *repository.AuditRepo
+	segments    *repository.SegmentRepo
+	audit       *repository.AuditRepo
+	invalidator *cache.Invalidator
 }
 
 // NewSegmentService creates a new SegmentService.
-func NewSegmentService(segmentRepo *repository.SegmentRepo, auditRepo *repository.AuditRepo) *SegmentService {
-	return &SegmentService{segmentRepo: segmentRepo, auditRepo: auditRepo}
+func NewSegmentService(segments *repository.SegmentRepo, audit *repository.AuditRepo, inv *cache.Invalidator) *SegmentService {
+	return &SegmentService{
+		segments:    segments,
+		audit:       audit,
+		invalidator: inv,
+	}
 }
 
-// GetByID retrieves a segment by UUID.
-func (s *SegmentService) GetByID(ctx context.Context, appID, id uuid.UUID) (*domain.Segment, error) {
-	return s.segmentRepo.GetByID(ctx, appID, id)
-}
-
-// List returns all segments for an application.
-func (s *SegmentService) List(ctx context.Context, appID uuid.UUID) ([]*domain.Segment, error) {
-	return s.segmentRepo.List(ctx, appID)
-}
-
-// Create creates a new segment with its rules.
-func (s *SegmentService) Create(ctx context.Context, req CreateSegmentRequest, actor domain.AuditActor) (*domain.Segment, error) {
+// Create creates a new segment.
+func (s *SegmentService) Create(ctx context.Context, inp CreateSegmentInput) (*domain.Segment, error) {
+	if inp.Operator == "" {
+		inp.Operator = domain.SegmentOpAll
+	}
 	seg := &domain.Segment{
-		ApplicationID: req.ApplicationID,
-		Name:          req.Name,
-		Description:   req.Description,
-		Operator:      req.Operator,
+		ApplicationID: inp.ApplicationID,
+		Name:          inp.Name,
+		Description:   inp.Description,
+		Operator:      inp.Operator,
+		Rules:         toSegmentRulesDomain(uuid.Nil, inp.Rules),
 	}
 
-	if err := s.segmentRepo.Create(ctx, seg); err != nil {
-		return nil, fmt.Errorf("creating segment: %w", err)
+	if err := s.segments.Create(ctx, seg); err != nil {
+		return nil, fmt.Errorf("create segment: %w", err)
 	}
 
-	for _, r := range req.Rules {
-		sr := &domain.SegmentRule{
-			SegmentID: seg.ID,
-			Attribute: r.Attribute,
-			Operator:  r.Operator,
-			Value:     r.Value,
-		}
-		if err := s.segmentRepo.CreateRule(ctx, sr); err != nil {
-			return nil, fmt.Errorf("creating segment rule: %w", err)
-		}
-		seg.Rules = append(seg.Rules, *sr)
-	}
-
-	afterJSON, _ := json.Marshal(seg)
-	_ = s.auditRepo.Create(ctx, &domain.AuditEvent{
+	after, _ := json.Marshal(seg)
+	auditEvent := &domain.AuditEvent{
+		ID:            uuid.New(),
 		ApplicationID: seg.ApplicationID,
 		Action:        domain.AuditActionSegmentCreated,
 		ResourceType:  "segment",
 		ResourceID:    seg.ID,
 		ResourceKey:   seg.Name,
-		Actor:         actor,
-		After:         json.RawMessage(afterJSON),
-		Metadata:      map[string]string{},
+		Actor:         inp.Actor,
+		After:         after,
 		OccurredAt:    time.Now().UTC(),
-	})
+	}
+	_ = s.audit.Create(ctx, auditEvent)
+	_ = s.invalidator.PublishSegmentInvalidation(ctx, seg.ApplicationID, seg.ID)
+
 	return seg, nil
 }
 
-// Update updates a segment's mutable fields and replaces its rules.
-func (s *SegmentService) Update(ctx context.Context, appID, id uuid.UUID, req CreateSegmentRequest, actor domain.AuditActor) (*domain.Segment, error) {
-	seg, err := s.segmentRepo.GetByID(ctx, appID, id)
+// Get retrieves a segment by ID (single UUID — appID inferred from the segment record).
+func (s *SegmentService) Get(ctx context.Context, segID uuid.UUID) (*domain.Segment, error) {
+	// Use uuid.Nil as appID since the handler doesn't scope by app in Get.
+	seg, err := s.segments.GetByID(ctx, uuid.Nil, segID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get segment: %w", err)
+	}
+	return seg, nil
+}
+
+// List returns paginated segments for an application.
+func (s *SegmentService) List(ctx context.Context, inp ListSegmentsInput) ([]*domain.Segment, int, error) {
+	segs, err := s.segments.List(ctx, inp.ApplicationID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list segments: %w", err)
+	}
+	total := len(segs)
+
+	limit := inp.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := inp.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= total {
+		return []*domain.Segment{}, total, nil
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	return segs[offset:end], total, nil
+}
+
+// Update updates a segment's fields and rules by ID.
+func (s *SegmentService) Update(ctx context.Context, segID uuid.UUID, inp UpdateSegmentInput) (*domain.Segment, error) {
+	// Fetch to get ApplicationID
+	existing, err := s.segments.GetByID(ctx, uuid.Nil, segID)
+	if err != nil {
+		return nil, fmt.Errorf("get segment for update: %w", err)
+	}
+	before, _ := json.Marshal(existing)
+
+	if inp.Operator == "" {
+		inp.Operator = domain.SegmentOpAll
+	}
+	existing.Name = inp.Name
+	existing.Description = inp.Description
+	existing.Operator = inp.Operator
+	existing.Rules = toSegmentRulesDomain(segID, inp.Rules)
+
+	if err := s.segments.Update(ctx, existing); err != nil {
+		return nil, fmt.Errorf("update segment: %w", err)
 	}
 
-	beforeJSON, _ := json.Marshal(seg)
-
-	seg.Name = req.Name
-	seg.Description = req.Description
-	seg.Operator = req.Operator
-
-	if err := s.segmentRepo.Update(ctx, seg); err != nil {
-		return nil, fmt.Errorf("updating segment: %w", err)
-	}
-
-	// Replace rules.
-	if err := s.segmentRepo.DeleteRulesBySegment(ctx, seg.ID); err != nil {
-		return nil, fmt.Errorf("deleting old segment rules: %w", err)
-	}
-	seg.Rules = nil
-	for _, r := range req.Rules {
-		sr := &domain.SegmentRule{
-			SegmentID: seg.ID,
-			Attribute: r.Attribute,
-			Operator:  r.Operator,
-			Value:     r.Value,
-		}
-		if err := s.segmentRepo.CreateRule(ctx, sr); err != nil {
-			return nil, fmt.Errorf("creating segment rule: %w", err)
-		}
-		seg.Rules = append(seg.Rules, *sr)
-	}
-
-	afterJSON, _ := json.Marshal(seg)
-	_ = s.auditRepo.Create(ctx, &domain.AuditEvent{
-		ApplicationID: seg.ApplicationID,
+	after, _ := json.Marshal(existing)
+	auditEvent := &domain.AuditEvent{
+		ID:            uuid.New(),
+		ApplicationID: existing.ApplicationID,
 		Action:        domain.AuditActionSegmentUpdated,
 		ResourceType:  "segment",
-		ResourceID:    seg.ID,
-		ResourceKey:   seg.Name,
-		Actor:         actor,
-		Before:        json.RawMessage(beforeJSON),
-		After:         json.RawMessage(afterJSON),
-		Metadata:      map[string]string{},
+		ResourceID:    existing.ID,
+		ResourceKey:   existing.Name,
+		Actor:         inp.Actor,
+		Before:        before,
+		After:         after,
 		OccurredAt:    time.Now().UTC(),
-	})
-	return seg, nil
+	}
+	_ = s.audit.Create(ctx, auditEvent)
+	_ = s.invalidator.PublishSegmentInvalidation(ctx, existing.ApplicationID, existing.ID)
+
+	return existing, nil
 }
 
-// Delete removes a segment.
-func (s *SegmentService) Delete(ctx context.Context, appID, id uuid.UUID, actor domain.AuditActor) error {
-	seg, err := s.segmentRepo.GetByID(ctx, appID, id)
-	if err != nil {
-		return err
+// Delete removes a segment by ID.
+func (s *SegmentService) Delete(ctx context.Context, id uuid.UUID, actor domain.AuditActor) error {
+	if err := s.segments.Delete(ctx, id); err != nil {
+		return fmt.Errorf("delete segment: %w", err)
 	}
-	if err := s.segmentRepo.Delete(ctx, id); err != nil {
-		return fmt.Errorf("deleting segment: %w", err)
+
+	auditEvent := &domain.AuditEvent{
+		ID:           uuid.New(),
+		Action:       domain.AuditActionSegmentDeleted,
+		ResourceType: "segment",
+		ResourceID:   id,
+		ResourceKey:  id.String(),
+		Actor:        actor,
+		OccurredAt:   time.Now().UTC(),
 	}
-	_ = s.auditRepo.Create(ctx, &domain.AuditEvent{
-		ApplicationID: seg.ApplicationID,
-		Action:        domain.AuditActionSegmentDeleted,
-		ResourceType:  "segment",
-		ResourceID:    seg.ID,
-		ResourceKey:   seg.Name,
-		Actor:         actor,
-		Metadata:      map[string]string{},
-		OccurredAt:    time.Now().UTC(),
-	})
+	_ = s.audit.Create(ctx, auditEvent)
+
 	return nil
+}
+
+// toSegmentRulesDomain converts SegmentRuleInput to domain.SegmentRule.
+func toSegmentRulesDomain(segmentID uuid.UUID, inputs []SegmentRuleInput) []domain.SegmentRule {
+	if len(inputs) == 0 {
+		return []domain.SegmentRule{}
+	}
+	out := make([]domain.SegmentRule, len(inputs))
+	for i, sr := range inputs {
+		out[i] = domain.SegmentRule{
+			SegmentID: segmentID,
+			Attribute: sr.Attribute,
+			Operator:  sr.Operator,
+			Value:     sr.Value,
+		}
+	}
+	return out
 }
